@@ -44,7 +44,7 @@ public:
 
     ~Fitter();
 
-    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data) const;
+    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmyc, double min_y_value, double max_y_value) const;
 
     void renderEntity(const ed::EntityConstPtr& e, const geo::Pose3D& sensor_pose_xya, int identifier,
                       std::vector<double>& model_ranges, std::vector<int>& identifiers);

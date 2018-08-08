@@ -204,8 +204,9 @@ Updater::~Updater()
 
 // ----------------------------------------------------------------------------------------------------
 
+
 bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& image, const geo::Pose3D& sensor_pose_const,
-                     const UpdateRequest& req, UpdateResult& res)
+                     const UpdateRequest& req, UpdateResult& res, bool apply_pmyc)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Prepare some things
@@ -284,7 +285,7 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
         if (fit_supporting_entity)
         {
             FitterData fitter_data;
-            fitter_.processSensorData(*image, sensor_pose, fitter_data);
+            fitter_.processSensorData(*image, sensor_pose, fitter_data, apply_pmyc, req.min_y_value, req.max_y_value);
 
             if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change))
             {

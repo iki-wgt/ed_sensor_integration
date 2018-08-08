@@ -66,6 +66,13 @@ private:
 
     bool srvUpdate(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res);
 
+    ros::ServiceServer srv_state_update_;
+
+    bool srvStateUpdate(ed_sensor_integration::Update::Request& stateReq, ed_sensor_integration::Update::Response& stateRes);
+
+    bool srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_pmyc);
+
+
     ros::ServiceServer srv_ray_trace_;
 
     bool srvRayTrace(ed_sensor_integration::RayTrace::Request& req, ed_sensor_integration::RayTrace::Response& res);

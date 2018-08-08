@@ -43,7 +43,7 @@ KinectPlugin::~KinectPlugin()
 
 void KinectPlugin::initialize(ed::InitData& init)
 {
-    tue::Configuration& config = init.config;    
+    tue::Configuration& config = init.config;
 
     std::string topic;
     if (config.value("topic", topic))
@@ -61,6 +61,7 @@ void KinectPlugin::initialize(ed::InitData& init)
     srv_get_image_ = nh.advertiseService("kinect/get_image", &KinectPlugin::srvGetImage, this);
     srv_update_ = nh.advertiseService("kinect/update", &KinectPlugin::srvUpdate, this);
     srv_ray_trace_ = nh.advertiseService("ray_trace", &KinectPlugin::srvRayTrace, this);
+    srv_state_update_ = nh.advertiseService("kinect/state_update", &KinectPlugin::srvStateUpdate, this);
 
     ray_trace_visualization_publisher_ = nh.advertise<visualization_msgs::Marker>("ray_trace_visualization", 10);
 }
@@ -69,7 +70,7 @@ void KinectPlugin::initialize(ed::InitData& init)
 
 void KinectPlugin::process(const ed::PluginInput& data, ed::UpdateRequest& req)
 {
-    const ed::WorldModel& world = data.world;   
+    const ed::WorldModel& world = data.world;
 
     // - - - - - - - - - - - - - - - - - -
     // Fetch kinect image and pose
@@ -147,8 +148,19 @@ bool KinectPlugin::srvGetImage(ed_sensor_integration::GetImage::Request& req, ed
 
 // ----------------------------------------------------------------------------------------------------
 
+bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateReq, ed_sensor_integration::Update::Response& stateRes)
+{
+    return srvUpdateImpl(stateReq, stateRes, true);
+}
+
 bool KinectPlugin::srvUpdate(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res)
-{    
+{
+    return srvUpdateImpl(req, res, false);
+}
+// ----------------------------------------------------------------------------------------------------
+
+bool KinectPlugin::srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_pmyc = false)
+{
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Get new image
 
@@ -167,13 +179,15 @@ bool KinectPlugin::srvUpdate(ed_sensor_integration::Update::Request& req, ed_sen
     UpdateRequest kinect_update_req;
     kinect_update_req.area_description = req.area_description;
     kinect_update_req.background_padding = req.background_padding;
+    kinect_update_req.min_y_value = req.min_y_value;
+    kinect_update_req.max_y_value = req.max_y_value;
 
     // We expect the orientation of the supporting entity to be approximately correct.
     // Therefore, only allow rotation updates up to 45 degrees (both clock-wise and anti-clock-wise)
     kinect_update_req.max_yaw_change = 0.25 * M_PI;
 
     UpdateResult kinect_update_res(*update_req_);
-    if (!updater_.update(*world_, image, sensor_pose, kinect_update_req, kinect_update_res))
+    if (!updater_.update(*world_, image, sensor_pose, kinect_update_req, kinect_update_res, apply_pmyc))
     {
         res.error_msg = kinect_update_res.error.str();
         return true;

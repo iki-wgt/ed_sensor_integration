@@ -271,7 +271,7 @@ bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& wo
 
 // ----------------------------------------------------------------------------------------------------
 
-void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data) const
+void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmyc = false, double min_y_value = 0, double max_y_value = 0) const
 {
     data.sensor_pose = sensor_pose;
     decomposePose(sensor_pose, data.sensor_pose_xya, data.sensor_pose_zrp);
@@ -297,6 +297,12 @@ void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sens
 
             if (p_floor.z < 0.2) // simple floor filter
                 continue;
+
+            if (apply_pmyc)
+            {
+                if(p_floor.z > max_y_value || p_floor.z < min_y_value)
+                    continue;
+            }
 
             int i = beam_model_.CalculateBeam(p_floor.x, p_floor.y);
             if (i >= 0 && i < ranges.size())
