@@ -52,7 +52,7 @@ public:
                       std::vector<double>& model_ranges, std::vector<int>& identifiers);
 
     bool estimateEntityPose(const FitterData& data, const ed::WorldModel& world, const ed::UUID& id,
-                   const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change = M_PI);
+                   const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change = M_PI, bool state_update = false);
 
     EntityRepresentation2D GetOrCreateEntity2D(const ed::EntityConstPtr& e);
 

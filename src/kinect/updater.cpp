@@ -287,14 +287,11 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
             FitterData fitter_data;
             if(apply_pmzc)
             {
-                std::cout << __FILE__ << ":" << __LINE__ << " inc:" << e->PMZC()->include << " min:" << e->PMZC()->min << " max:" << e->PMZC()->max << std::endl;
-
+                //The PMZC values are local to the object description in the YAML (no world context).
+                //Add the height of the object in the world model
                 geo::Pose3D pose = e->pose();
                 float min = e->PMZC()->min + pose.t.z;
                 float max = e->PMZC()->max + pose.t.z;
-
-                std::cout << __FILE__ << ":" << __LINE__ << " po.z:" << pose.t.z << " min:" << min << " max:" << max << std::endl;
-
 
                 fitter_.processSensorData(*image, sensor_pose, fitter_data, e->PMZC()->include, min, max);
             }
@@ -303,7 +300,7 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
                 fitter_.processSensorData(*image, sensor_pose, fitter_data);
             }
 
-            if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change))
+            if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change, apply_pmzc))
             {
                 res.update_req.setPose(entity_id, new_pose);
             }

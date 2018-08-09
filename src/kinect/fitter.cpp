@@ -68,7 +68,7 @@ Fitter::~Fitter()
 // ----------------------------------------------------------------------------------------------------
 
 bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& world, const ed::UUID& id,
-                                const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change)
+                                const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change, bool state_update)
 {
     const std::vector<double>& sensor_ranges = data.sensor_ranges;
 
@@ -96,6 +96,7 @@ bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& wo
 
     std::vector<double> model_ranges(sensor_ranges.size(), 0);
     std::vector<int> dummy_identifiers(sensor_ranges.size(), -1);
+    std::string thisGroupName = e->stateUpdateGroup(); //Group name of the object thats state is updated
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
@@ -111,6 +112,14 @@ bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& wo
 
         if (id_str.size() >= 5 && id_str.substr(0, 5) == "amigo")
             continue;
+
+        if (!thisGroupName.empty() && state_update)
+        {
+            //Do not render objects that are in the same state-update-group,
+            //because overlapping/too close objects will lead to unexpected results
+            if(thisGroupName.compare(e->stateUpdateGroup()) == 0)
+                continue;
+        }
 
         renderEntity(e, data.sensor_pose_xya, -1, model_ranges, dummy_identifiers);
     }
