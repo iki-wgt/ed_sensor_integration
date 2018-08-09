@@ -44,7 +44,9 @@ public:
 
     ~Fitter();
 
-    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmyc, double min_y_value, double max_y_value) const;
+    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data);
+    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool include, float min, float max);
+
 
     void renderEntity(const ed::EntityConstPtr& e, const geo::Pose3D& sensor_pose_xya, int identifier,
                       std::vector<double>& model_ranges, std::vector<int>& identifiers);
@@ -71,6 +73,8 @@ private:
     std::map<std::string, EntityRepresentation2D> models_;
 
     ed::models::ModelLoader model_loader_;
+
+    void processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmzc, bool include, float min, float max) const;
 
 };
 

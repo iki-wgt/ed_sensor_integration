@@ -6,6 +6,9 @@
 #include <ed/logging.h>
 #include <geolib/Shape.h>
 
+#include <ed/types.h>
+#include <ed/PMZC.h>
+
 // Image capture
 #include <rgbd/Image.h>
 #include <geolib/ros/tf_conversions.h>
@@ -21,6 +24,8 @@
 
 // Communication
 #include "ed_sensor_integration/ImageBinary.h"
+
+#include <iostream>
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -271,7 +276,18 @@ bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& wo
 
 // ----------------------------------------------------------------------------------------------------
 
-void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmyc = false, double min_y_value = 0, double max_y_value = 0) const
+void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data)
+{
+    return processSensorDataImpl(image, sensor_pose, data, false, false, 0, 0);
+}
+
+void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool include, float min, float max)
+{
+    return processSensorDataImpl(image, sensor_pose, data, true, include, min, max);
+}
+
+
+void Fitter::processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmzc, bool include, float min, float max) const
 {
     data.sensor_pose = sensor_pose;
     decomposePose(sensor_pose, data.sensor_pose_xya, data.sensor_pose_zrp);
@@ -298,10 +314,23 @@ void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sens
             if (p_floor.z < 0.2) // simple floor filter
                 continue;
 
-            if (apply_pmyc)
+            if (apply_pmzc)
             {
-                if(p_floor.z > max_y_value || p_floor.z < min_y_value)
-                    continue;
+                // Filter values based on 3d height.
+                // Continue -> filter value
+
+                if(include)
+                {
+                    // If not in range [min,max] filter value
+                    if(p_floor.z > max || p_floor.z < min)
+                        continue;
+                }
+                else
+                {
+                    // If in range [min,max] filter value
+                    if(p_floor.z < max && p_floor.z > min)
+                        continue;
+                }
             }
 
             int i = beam_model_.CalculateBeam(p_floor.x, p_floor.y);

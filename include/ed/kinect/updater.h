@@ -9,7 +9,7 @@
 
 struct UpdateRequest
 {
-    UpdateRequest() : background_padding(0), max_yaw_change(M_PI), min_y_value(0), max_y_value(0) {}
+    UpdateRequest() : background_padding(0), max_yaw_change(M_PI) {}
 
     // Symbolic description of area to be updated (e.g. "on_top_of cabinet")
     std::string area_description;
@@ -21,9 +21,6 @@ struct UpdateRequest
     // When refitting an entity, this states the maximum change in yaw (in radians), i.e., the fitted
     // yaw will deviate at most 'max_yaw_change' from the estimated yaw
     double max_yaw_change;
-
-    double min_y_value;
-    double max_y_value;
 };
 
 // ----------------------------------------------------------------------------------------------------
@@ -50,7 +47,7 @@ public:
     ~Updater();
 
     bool update(const ed::WorldModel& world, const rgbd::ImageConstPtr& image, const geo::Pose3D& sensor_pose,
-                const UpdateRequest& req, UpdateResult& res, bool apply_pmyc = false);
+                const UpdateRequest& req, UpdateResult& res, bool apply_pmzc = false);
 
 private:
 

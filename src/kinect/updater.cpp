@@ -206,7 +206,7 @@ Updater::~Updater()
 
 
 bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& image, const geo::Pose3D& sensor_pose_const,
-                     const UpdateRequest& req, UpdateResult& res, bool apply_pmyc)
+                     const UpdateRequest& req, UpdateResult& res, bool apply_pmzc)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Prepare some things
@@ -285,7 +285,23 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
         if (fit_supporting_entity)
         {
             FitterData fitter_data;
-            fitter_.processSensorData(*image, sensor_pose, fitter_data, apply_pmyc, req.min_y_value, req.max_y_value);
+            if(apply_pmzc)
+            {
+                std::cout << __FILE__ << ":" << __LINE__ << " inc:" << e->PMZC()->include << " min:" << e->PMZC()->min << " max:" << e->PMZC()->max << std::endl;
+
+                geo::Pose3D pose = e->pose();
+                float min = e->PMZC()->min + pose.t.z;
+                float max = e->PMZC()->max + pose.t.z;
+
+                std::cout << __FILE__ << ":" << __LINE__ << " po.z:" << pose.t.z << " min:" << min << " max:" << max << std::endl;
+
+
+                fitter_.processSensorData(*image, sensor_pose, fitter_data, e->PMZC()->include, min, max);
+            }
+            else
+            {
+                fitter_.processSensorData(*image, sensor_pose, fitter_data);
+            }
 
             if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change))
             {

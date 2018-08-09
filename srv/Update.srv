@@ -12,10 +12,6 @@ string area_description
 # Padding of the world model when subtracting background for segmentation (in meters)
 float32 background_padding
 
-# PMYC
-float32 min_y_value
-float32 max_y_value
-
 ---
 string[] new_ids      # ids of new entities
 string[] updated_ids  # ids of updated entities
