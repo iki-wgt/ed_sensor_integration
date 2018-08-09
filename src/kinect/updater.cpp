@@ -24,6 +24,7 @@
 
 #include <ros/console.h>
 
+#include <cmath>
 // ----------------------------------------------------------------------------------------------------
 
 // Calculates which depth points are in the given convex hull (in the EntityUpdate), updates the mask,
@@ -302,7 +303,14 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
 
             if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change, apply_pmzc))
             {
-                res.update_req.setPose(entity_id, new_pose);
+                if(e->hasFlag("state-update-group-main") && !e->stateUpdateGroup().empty())
+                {
+                    updateStateGroupPose(world, res, e, new_pose);
+                }
+                else
+                {
+                    res.update_req.setPose(entity_id, new_pose);
+                }
             }
             else
             {
@@ -491,4 +499,40 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
     }
 
     return true;
+}
+
+inline double Updater::quaternionToYaw(const geo::Quaternion& q)
+{
+    double mag = sqrt(q.getZ() * q.getZ() + q.getW() * q.getW());
+    return 2 * acos(q.getZ() / mag);
+}
+
+void Updater::updateStateGroupPose(const ed::WorldModel& world, const UpdateResult& res, const ed::EntityConstPtr& mainObject, const geo::Pose3D& new_pose)
+{
+    std::string mainGroupName = mainObject->stateUpdateGroup();
+
+    //math_types::Transform3.getYaw() is bugged -> use quaternionToYaw
+    const double yawDif = quaternionToYaw(mainObject->pose().getQuaternion()) - quaternionToYaw(new_pose.getQuaternion());
+    double c = cos(yawDif);
+    double s = sin(yawDif);
+    geo::Mat3 yaw_rot_mat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+    geo::Vec3 pose_dif = new_pose.getOrigin() - mainObject->pose().getOrigin();
+
+    for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
+    {
+        const ed::EntityConstPtr& e = *it;
+        if(mainGroupName.compare(e->stateUpdateGroup()) == 0)
+        {
+            geo::Pose3D new_pose;
+
+            geo::Vec3 new_sub_position = e->pose().getOrigin() - mainObject->pose().getOrigin();
+            new_sub_position = yaw_rot_mat * new_sub_position;
+            new_sub_position += mainObject->pose().getOrigin();
+
+            new_pose.setOrigin(new_sub_position + pose_dif);
+            new_pose.setBasis(e->pose().getBasis() * yaw_rot_mat);
+
+            res.update_req.setPose(e->id(), new_pose);
+        }
+    }
 }
