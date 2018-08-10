@@ -58,8 +58,6 @@ private:
     // Stores for each segmented entity with which area description it was found
     std::map<ed::UUID, std::string> id_to_area_description_;
 
-    inline double quaternionToYaw(const geo::Quaternion& q);
-
     void updateStateGroupPose(const ed::WorldModel& world, const UpdateResult& res, const ed::EntityConstPtr& mainObject, const geo::Pose3D& new_pose);
 };
 

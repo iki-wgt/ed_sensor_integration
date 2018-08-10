@@ -62,6 +62,7 @@ void KinectPlugin::initialize(ed::InitData& init)
     srv_update_ = nh.advertiseService("kinect/update", &KinectPlugin::srvUpdate, this);
     srv_ray_trace_ = nh.advertiseService("ray_trace", &KinectPlugin::srvRayTrace, this);
     srv_state_update_ = nh.advertiseService("kinect/state_update", &KinectPlugin::srvStateUpdate, this);
+    srv_get_state_ = nh.advertiseService("kinect/get_state", &KinectPlugin::srvGetState, this);
 
     ray_trace_visualization_publisher_ = nh.advertise<visualization_msgs::Marker>("ray_trace_visualization", 10);
 }
@@ -179,7 +180,7 @@ bool KinectPlugin::srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed
     UpdateRequest kinect_update_req;
     kinect_update_req.area_description = req.area_description;
     kinect_update_req.background_padding = req.background_padding;
-  
+
     // We expect the orientation of the supporting entity to be approximately correct.
     // Therefore, only allow rotation updates up to 45 degrees (both clock-wise and anti-clock-wise)
     kinect_update_req.max_yaw_change = 0.25 * M_PI;
@@ -211,6 +212,35 @@ bool KinectPlugin::srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed
 
     return true;
 }
+
+// ----------------------------------------------------------------------------------------------------
+
+#include <iostream>
+
+bool KinectPlugin::srvGetState(ed_sensor_integration::GetState::Request& req, ed_sensor_integration::GetState::Response& res)
+{
+    RecognizeStateRequest recognize_state_req = RecognizeStateRequest(req.id);
+    RecognizeStateResult recognize_state_res;
+
+    bool recognizeStateWorked = recognizeState_.recognizeState(*world_, recognize_state_req, recognize_state_res);
+
+    res.error_msg = recognize_state_res.error.str();
+    res.warning_msg = recognize_state_res.warning.str();
+
+    if (recognizeStateWorked)
+    {
+        res.state = recognize_state_res.state;
+        res.stateRatio = recognize_state_res.stateRatio;
+    }
+    else
+    {
+        res.state = "";
+        res.stateRatio = -1;
+    }
+
+    return true;
+}
+
 
 // ----------------------------------------------------------------------------------------------------
 

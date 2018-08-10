@@ -6,11 +6,13 @@
 
 #include "ed/kinect/image_buffer.h"
 #include "ed/kinect/updater.h"
+#include "ed/kinect/recognizeState.h"
 
 // Services
 #include <ros/service_server.h>
 #include <ed_sensor_integration/GetImage.h>
 #include <ed_sensor_integration/Update.h>
+#include <ed_sensor_integration/GetState.h>
 #include <ed_sensor_integration/RayTrace.h>
 
 // Visualization
@@ -45,6 +47,8 @@ private:
 
     Updater updater_;
 
+    RecognizeState recognizeState_; 
+
 
     // Communication
 
@@ -71,6 +75,11 @@ private:
     bool srvStateUpdate(ed_sensor_integration::Update::Request& stateReq, ed_sensor_integration::Update::Response& stateRes);
 
     bool srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_pmzc);
+
+
+    ros::ServiceServer srv_get_state_;
+
+    bool srvGetState(ed_sensor_integration::GetState::Request& req, ed_sensor_integration::GetState::Response& res);
 
 
     ros::ServiceServer srv_ray_trace_;

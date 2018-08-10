@@ -25,6 +25,8 @@
 #include <ros/console.h>
 
 #include <cmath>
+
+#include "ed/kinect/math_helper.h"
 // ----------------------------------------------------------------------------------------------------
 
 // Calculates which depth points are in the given convex hull (in the EntityUpdate), updates the mask,
@@ -501,18 +503,13 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
     return true;
 }
 
-inline double Updater::quaternionToYaw(const geo::Quaternion& q)
-{
-    double mag = sqrt(q.getZ() * q.getZ() + q.getW() * q.getW());
-    return 2 * acos(q.getZ() / mag);
-}
 
 void Updater::updateStateGroupPose(const ed::WorldModel& world, const UpdateResult& res, const ed::EntityConstPtr& mainObject, const geo::Pose3D& new_pose)
 {
     std::string mainGroupName = mainObject->stateUpdateGroup();
 
     //math_types::Transform3.getYaw() is bugged -> use quaternionToYaw
-    const double yawDif = quaternionToYaw(mainObject->pose().getQuaternion()) - quaternionToYaw(new_pose.getQuaternion());
+    const double yawDif = ed_sensor_integration::math_helper::QuaternionToYaw(mainObject->pose().getQuaternion()) - ed_sensor_integration::math_helper::QuaternionToYaw(new_pose.getQuaternion());
     double c = cos(yawDif);
     double s = sin(yawDif);
     geo::Mat3 yaw_rot_mat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
