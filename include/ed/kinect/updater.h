@@ -59,6 +59,10 @@ private:
     std::map<ed::UUID, std::string> id_to_area_description_;
 
     void updateStateGroupPose(const ed::WorldModel& world, const UpdateResult& res, const ed::EntityConstPtr& mainObject, const geo::Pose3D& new_pose);
+
+    void updateRestricted(const UpdateResult& res, const ed::EntityConstPtr& mainObject, geo::Pose3D& new_pose);
+
+
 };
 
 #endif

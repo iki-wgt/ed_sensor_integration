@@ -305,9 +305,21 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
 
             if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change, apply_pmzc))
             {
-                if(e->hasFlag("state-update-group-main") && !e->stateUpdateGroup().empty())
+                bool hasStateUpdateGroup = !e->stateUpdateGroup().empty();
+                if(apply_pmzc && hasStateUpdateGroup)
                 {
-                    updateStateGroupPose(world, res, e, new_pose);
+                    if(e->hasFlag("state-update-group-main"))
+                    {
+                        updateStateGroupPose(world, res, e, new_pose);
+                    }
+                    else if(e->has_move_restrictions())
+                    {
+                        updateRestricted(res, e, new_pose);
+                    }
+                    else
+                    {
+                        res.update_req.setPose(entity_id, new_pose);
+                    }
                 }
                 else
                 {
@@ -512,7 +524,7 @@ void Updater::updateStateGroupPose(const ed::WorldModel& world, const UpdateResu
     const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(mainObject->pose().getQuaternion(), new_pose.getQuaternion());
     double c = cos(yawDif);
     double s = sin(yawDif);
-    geo::Mat3 yaw_rot_mat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+    geo::Mat3 yawRotMat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
     geo::Vec3 pose_dif = new_pose.getOrigin() - mainObject->pose().getOrigin();
 
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
@@ -523,13 +535,58 @@ void Updater::updateStateGroupPose(const ed::WorldModel& world, const UpdateResu
             geo::Pose3D new_pose;
 
             geo::Vec3 new_sub_position = e->pose().getOrigin() - mainObject->pose().getOrigin();
-            new_sub_position = yaw_rot_mat * new_sub_position;
+            new_sub_position = yawRotMat * new_sub_position;
             new_sub_position += mainObject->pose().getOrigin();
 
             new_pose.setOrigin(new_sub_position + pose_dif);
-            new_pose.setBasis(e->pose().getBasis() * yaw_rot_mat);
+            new_pose.setBasis(e->pose().getBasis() * yawRotMat);
 
             res.update_req.setPose(e->id(), new_pose);
         }
     }
+}
+
+void Updater::updateRestricted(const UpdateResult& res, const ed::EntityConstPtr& obj, geo::Pose3D& new_pose)
+{
+    if(obj->moveRestrictions()->canMove)
+    {
+        geo::Vec3 moveDir = geo::Vec3(obj->moveRestrictions()->moveDirection.x, obj->moveRestrictions()->moveDirection.y, 0);
+
+        const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(obj->pose().getQuaternion(), obj->originalPose().getQuaternion());
+        double c = cos(yawDif);
+        double s = sin(yawDif);
+        geo::Mat3 yawRotMat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+
+        moveDir = yawRotMat * moveDir;
+
+        geo::Vec3 newPoseMoveDir = new_pose.getOrigin() - obj->pose().getOrigin();
+
+        geo::Vec3 moveDirNorm = moveDir.normalized();
+        geo::Vec3 newPoseMoveDirNorm = newPoseMoveDir.normalized();
+
+        double dotProd = moveDirNorm.dot(newPoseMoveDirNorm);
+
+        dotProd *= newPoseMoveDir.length();
+
+        new_pose = geo::Pose3D(new_pose.R, new_pose.t + moveDirNorm * dotProd);
+    }
+    else
+    {
+        //Do not update position
+        new_pose.setOrigin(obj->pose().t);
+    }
+
+    if(!obj->moveRestrictions()->canRotate)
+    {
+        //Do not update rotation
+        new_pose.setBasis(obj->pose().R);
+    }
+
+    if(!obj->moveRestrictions()->canMove && !obj->moveRestrictions()->canRotate)
+    {
+        ROS_WARN("Updater::updateRestricted(..). Entity %s can not move or rotate. Might be an error in the YAML.", obj->type().c_str());
+    }
+
+
+    res.update_req.setPose(obj->id(), new_pose);
 }
