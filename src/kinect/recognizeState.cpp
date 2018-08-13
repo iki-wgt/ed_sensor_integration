@@ -54,11 +54,11 @@ bool RecognizeState::recognizeState(const ed::WorldModel& world, const Recognize
     {
         if(thisEntity->pose().t == thisEntity->originalPose().t && thisEntity->pose().R == thisEntity->originalPose().R)
         {
-            res.warning << "Entity: '" << req.id << "' has the same pose and originalPose and thus was likely never state-updated. Please use /ed/kinect/state-update to update before using /ed/kinect/get_state.";
+            res.warning << "Entity: '" << req.id << "' has the same pose and originalPose and thus was likely never state-updated. Please use /ed/kinect/state-update to update before using /ed/kinect/get_state."  << std::endl;
         }
 
 
-
+        // xor the flags, only one can and has to be set
         if(thisEntity->stateDefinition()->angle != thisEntity->stateDefinition()->position)
         {
             std::string groupName = thisEntity->stateUpdateGroup();
@@ -75,20 +75,20 @@ bool RecognizeState::recognizeState(const ed::WorldModel& world, const Recognize
                     bool mainHasPoseAndOrigPose = true;
                     if(!other->has_pose())
                     {
-                        res.warning << "Entity: '" << req.id << "' as main object of group " << other->stateUpdateGroup() << " has no pose.";
+                        res.warning << "Entity: '" << req.id << "' as main object of group " << other->stateUpdateGroup() << " has no pose." << std::endl;
                         mainHasPoseAndOrigPose = false;
                     }
 
                     if(!other->has_original_pose())
                     {
-                        res.warning << "Entity: '" << req.id << "' as main object of group " << other->stateUpdateGroup() << " has no original pose.";
+                        res.warning << "Entity: '" << req.id << "' as main object of group " << other->stateUpdateGroup() << " has no original pose." << std::endl;
                         mainHasPoseAndOrigPose = false;
                     }
 
                     if(mainHasPoseAndOrigPose)
                     {
                         //Found main in thisObjects group
-                        foundMain = true;
+                        foundMain = true; // -> break loop
                         mainEntity = other;
                     }
                     else
@@ -112,41 +112,26 @@ bool RecognizeState::recognizeState(const ed::WorldModel& world, const Recognize
             }
             else
             {
-
-
-                      // bool angle;
-                      // bool position;
-                      // float angleDifferenceClose;
-                      // float angleDifferenceOpen;
-                      // float positionDifferenceClose;
-                      // float positionDifferenceOpen;
-
                 double value, closeValue, openValue;
 
                 if(thisEntity->stateDefinition()->angle)
                 {
-                    //TODO: Not tested and check the math
-                    // double origMainAngle = ed_sensor_integration::math_helper::QuaternionToYaw(mainEntity->originalPose().getQuaternion());
-                    // double origThisAngle = ed_sensor_integration::math_helper::QuaternionToYaw(thisEntity->originalPose().getQuaternion());
-                    //
-                    // double currMainAngle = ed_sensor_integration::math_helper::QuaternionToYaw(mainEntity->pose().getQuaternion());
-                    // double currThisAngle = ed_sensor_integration::math_helper::QuaternionToYaw(thisEntity->pose().getQuaternion());
-                    //
-                    // double origDif = origThisAngle - origMainAngle;
-                    // double currDif = currThisAngle - currMainAngle;
-                    //
-                    // value = currDif - origDif;
-                    //
-                    // closeValue = thisEntity->stateDefinition()->angleDifferenceClose;
-                    // openValue = thisEntity->stateDefinition()->angleDifferenceOpen;
+                    double origDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(mainEntity->originalPose().getQuaternion(), mainEntity->pose().getQuaternion());
+                    double currDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(thisEntity->originalPose().getQuaternion(), thisEntity->pose().getQuaternion());
+
+                    value = origDif - currDif;
+                    
+                    closeValue = thisEntity->stateDefinition()->angleDifferenceClose;
+                    openValue = thisEntity->stateDefinition()->angleDifferenceOpen;
                 }
                 else
                 {
-                    //TODO: Check the math
-                    double mainDif = (mainEntity->originalPose().getOrigin() - mainEntity->pose().getOrigin()).length();
-                    double thisDif = (thisEntity->originalPose().getOrigin() - thisEntity->pose().getOrigin()).length();
+                    //Get all movement the main object did and subtract this movement from the current position of thisEntity.
+                    //This will move the object relative to its originalPose, where the main object position does not matter
+                    geo::Vec3 movementMain = mainEntity->originalPose().getOrigin() - mainEntity->pose().getOrigin();
+                    geo::Vec3 thisCurrentPosition = thisEntity->pose().getOrigin() - movementMain;
 
-                    value = thisDif - mainDif;
+                    value = (thisEntity->originalPose().getOrigin() - thisCurrentPosition).length();
 
                     closeValue = thisEntity->stateDefinition()->positionDifferenceClose;
                     openValue = thisEntity->stateDefinition()->positionDifferenceOpen;
@@ -161,6 +146,12 @@ bool RecognizeState::recognizeState(const ed::WorldModel& world, const Recognize
                 else
                 {
                     res.state = "closed";
+                }
+
+
+                if(res.stateRatio < 0 || res.stateRatio > 1)
+                {
+                    res.warning << "Ratio is out of bounds (" << res.stateRatio << "). This is not critical, but you might check the YAML description of the entity." << std::endl;
                 }
             }
         }

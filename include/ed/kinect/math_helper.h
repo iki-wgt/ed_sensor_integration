@@ -7,7 +7,8 @@ namespace ed_sensor_integration
 {
     namespace math_helper
     {
-        double QuaternionToYaw(const geo::Quaternion& q);
+        double AngleBetweenTwoQuaternions(const geo::Quaternion& q1, const geo::Quaternion& q2);
+        geo::Mat3 QuaternionToRotationMatrix(const geo::Quaternion& q1);
     }
 }
 

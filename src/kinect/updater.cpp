@@ -508,8 +508,8 @@ void Updater::updateStateGroupPose(const ed::WorldModel& world, const UpdateResu
 {
     std::string mainGroupName = mainObject->stateUpdateGroup();
 
-    //math_types::Transform3.getYaw() is bugged -> use quaternionToYaw
-    const double yawDif = ed_sensor_integration::math_helper::QuaternionToYaw(mainObject->pose().getQuaternion()) - ed_sensor_integration::math_helper::QuaternionToYaw(new_pose.getQuaternion());
+    // use AngleBetweenTwoQuaternions instead of geo::Transform3::getYaw, because getYaw behaves strangely
+    const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(mainObject->pose().getQuaternion(), new_pose.getQuaternion());
     double c = cos(yawDif);
     double s = sin(yawDif);
     geo::Mat3 yaw_rot_mat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
