@@ -288,7 +288,7 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
         if (fit_supporting_entity)
         {
             FitterData fitter_data;
-            if(apply_pmzc)
+            if(apply_pmzc && e->has_pmzc())
             {
                 //The PMZC values are local to the object description in the YAML (no world context).
                 //Add the height of the object in the world model

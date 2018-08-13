@@ -15,6 +15,7 @@
 
 #include "ed/kinect/association.h"
 
+
 // GetImage
 #include <rgbd/serialization.h>
 #include <tue/serialization/conversions.h>
@@ -26,6 +27,8 @@
 //#include <opencv2/highgui/highgui.hpp>
 
 #include "ray_tracer.h"
+
+#include <vector>
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -151,7 +154,86 @@ bool KinectPlugin::srvGetImage(ed_sensor_integration::GetImage::Request& req, ed
 
 bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateReq, ed_sensor_integration::Update::Response& stateRes)
 {
-    return srvUpdateImpl(stateReq, stateRes, true);
+    // ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+    // ros::console::notifyLoggerLevelsChanged();
+
+    ed::UUID entity_id = stateReq.area_description;
+    ed::EntityConstPtr reqEntity = (*world_).getEntity(entity_id);
+    ROS_DEBUG("Got entity");
+    ROS_DEBUG("Has flag %d", reqEntity->hasFlag("state-update-group-composition"));
+    ROS_DEBUG("Group: '%s'", reqEntity->stateUpdateGroup().c_str());
+    // loop over all entitys and grap all from the same group
+    if(reqEntity->hasFlag("state-update-group-composition") && !reqEntity->stateUpdateGroup().empty())
+    {
+        std::vector<ed::EntityConstPtr> entities;
+        bool foundMain = false;
+        for(ed::WorldModel::const_iterator it = (*world_).begin(); it != (*world_).end(); ++it)
+        {
+            const ed::EntityConstPtr& e = *it;
+            if(reqEntity->stateUpdateGroup().compare(e->stateUpdateGroup()) == 0)
+            {
+                if(e->hasFlag("state-update-group-main"))
+                {
+                    if(!foundMain)
+                    {
+                        // set main group entity as first in the list
+                        entities.insert(entities.begin(), e);
+                        foundMain = true;
+                    }
+                    else
+                    {
+                        ROS_WARN("There were two or more objects in the group %s whith the flag state-update-group-main.", reqEntity->stateUpdateGroup().c_str());
+                    }
+                }
+                else
+                {
+                    entities.push_back(e);
+                }
+            }
+        }
+        // loop over all found entitys from the group, the main should be in the first place
+        for(std::vector<ed::EntityConstPtr>::iterator it = entities.begin(); it != entities.end(); ++it)
+        {
+            ed::EntityConstPtr& e = *it;
+            ed_sensor_integration::Update::Request newReq;
+            ed_sensor_integration::Update::Response newRes;
+            newReq.area_description = e->type();
+            newReq.background_padding = stateReq.background_padding;
+
+            ROS_DEBUG("Updating: %s", e->type().c_str());
+
+            if(!srvUpdateImpl(newReq, newRes, true))
+            {
+                return false;
+            }
+            // store result informations of each entity inside the commulated result
+            for(std::vector<std::string>::iterator it2 = newRes.new_ids.begin(); it2 != newRes.new_ids.end(); ++it2)
+            {
+                stateRes.new_ids.push_back(*it2);
+            }
+
+            for(std::vector<std::string>::iterator it2 = newRes.updated_ids.begin(); it2 != newRes.updated_ids.end(); ++it2)
+            {
+                stateRes.updated_ids.push_back(*it2);
+            }
+
+            for(std::vector<std::string>::iterator it2 = newRes.deleted_ids.begin(); it2 != newRes.deleted_ids.end(); ++it2)
+            {
+                stateRes.deleted_ids.push_back(*it2);
+            }
+
+            stateRes.error_msg = stateRes.error_msg + e->type() + ": " + newRes.error_msg + "\n";
+        }
+
+        return true;
+    }
+    else
+    {
+        // boring single update
+        return srvUpdateImpl(stateReq, stateRes, true);
+    }
+
+    return false;
 }
 
 bool KinectPlugin::srvUpdate(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res)
