@@ -159,10 +159,16 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateR
 
     ed::UUID entity_id = stateReq.area_description;
     ed::EntityConstPtr reqEntity = (*world_).getEntity(entity_id);
-    ROS_DEBUG("Got entity");
+    ROS_DEBUG("State Update");
+    if(!reqEntity)
+    {
+        stateRes.error_msg = "No such entity: '" + stateReq.area_description + "'";
+        return true;
+    }
     ROS_DEBUG("Has flag %d", reqEntity->hasFlag("state-update-group-composition"));
     ROS_DEBUG("Group: '%s'", reqEntity->stateUpdateGroup().c_str());
     // loop over all entitys and grap all from the same group
+
     if(reqEntity->hasFlag("state-update-group-composition") && !reqEntity->stateUpdateGroup().empty())
     {
         std::vector<ed::EntityConstPtr> entities;
@@ -197,10 +203,10 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateR
             ed::EntityConstPtr& e = *it;
             ed_sensor_integration::Update::Request newReq;
             ed_sensor_integration::Update::Response newRes;
-            newReq.area_description = e->type();
+            newReq.area_description = e->id().c_str();
             newReq.background_padding = stateReq.background_padding;
 
-            ROS_DEBUG("Updating: %s", e->type().c_str());
+            ROS_DEBUG("Updating: %s", e->id().c_str());
 
             if(!srvUpdateImpl(newReq, newRes, true))
             {
@@ -221,8 +227,7 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateR
             {
                 stateRes.deleted_ids.push_back(*it2);
             }
-
-            stateRes.error_msg = stateRes.error_msg + e->type() + ": " + newRes.error_msg + "\n";
+            stateRes.error_msg = stateRes.error_msg + e->id().c_str() + ": " + newRes.error_msg + "                              \n";
         }
 
         return true;

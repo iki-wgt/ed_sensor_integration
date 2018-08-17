@@ -39,5 +39,24 @@ namespace ed_sensor_integration
                              2 * q1N.y * q1N.z + 2 * q1N.x * q1N.w, \
                              1 - 2 * q1N.x * q1N.x - 2 * q1N.y * q1N.y);
         }
+
+        double fmod(double value, double mod)
+        {
+          if(value >=0)
+          {
+            if(value > mod)
+            {
+              return fmod(value-mod,mod);
+            }
+            else
+            {
+              return value;
+            }
+          }
+          else
+          {
+            return fmod(value+mod,mod);
+          }
+        }
     }
 }

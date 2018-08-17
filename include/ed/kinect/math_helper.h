@@ -9,6 +9,7 @@ namespace ed_sensor_integration
     {
         double AngleBetweenTwoQuaternions(const geo::Quaternion& q1, const geo::Quaternion& q2);
         geo::Mat3 QuaternionToRotationMatrix(const geo::Quaternion& q1);
+        double fmod(double value, double mod);
     }
 }
 

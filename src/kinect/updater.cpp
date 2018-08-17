@@ -27,6 +27,8 @@
 #include <cmath>
 
 #include "ed/kinect/math_helper.h"
+
+
 // ----------------------------------------------------------------------------------------------------
 
 // Calculates which depth points are in the given convex hull (in the EntityUpdate), updates the mask,
@@ -552,23 +554,19 @@ void Updater::updateRestricted(const UpdateResult& res, const ed::EntityConstPtr
     {
         geo::Vec3 moveDir = geo::Vec3(obj->moveRestrictions()->moveDirection.x, obj->moveRestrictions()->moveDirection.y, 0);
 
-        const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(obj->pose().getQuaternion(), obj->originalPose().getQuaternion());
-        double c = cos(yawDif);
-        double s = sin(yawDif);
-        geo::Mat3 yawRotMat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+        geo::Mat3 yawRotMat = ed_sensor_integration::math_helper::QuaternionToRotationMatrix(obj->pose().getQuaternion());
+        geo::Mat3 yawRotMat2 = geo::Mat3(0, -1, 0,1, 0, 0, 0, 0, 1); // yawRotMat is 90° wrong, -+ doesnt matter
 
-        moveDir = yawRotMat * moveDir;
+        moveDir = yawRotMat * yawRotMat2 * moveDir;
 
         geo::Vec3 newPoseMoveDir = new_pose.getOrigin() - obj->pose().getOrigin();
-
         geo::Vec3 moveDirNorm = moveDir.normalized();
         geo::Vec3 newPoseMoveDirNorm = newPoseMoveDir.normalized();
 
         double dotProd = moveDirNorm.dot(newPoseMoveDirNorm);
-
         dotProd *= newPoseMoveDir.length();
 
-        new_pose = geo::Pose3D(new_pose.R, new_pose.t + moveDirNorm * dotProd);
+        new_pose = geo::Pose3D(new_pose.R, obj->pose().t + moveDirNorm * dotProd);
     }
     else
     {

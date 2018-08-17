@@ -120,18 +120,28 @@ bool RecognizeState::recognizeState(const ed::WorldModel& world, const Recognize
                     double currDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(thisEntity->originalPose().getQuaternion(), thisEntity->pose().getQuaternion());
 
                     value = origDif - currDif;
-                    
+                    value = ed_sensor_integration::math_helper::fmod(value+3.14,6.28)-3.14;
+
                     closeValue = thisEntity->stateDefinition()->angleDifferenceClose;
                     openValue = thisEntity->stateDefinition()->angleDifferenceOpen;
                 }
                 else
                 {
-                    //Get all movement the main object did and subtract this movement from the current position of thisEntity.
-                    //This will move the object relative to its originalPose, where the main object position does not matter
-                    geo::Vec3 movementMain = mainEntity->originalPose().getOrigin() - mainEntity->pose().getOrigin();
-                    geo::Vec3 thisCurrentPosition = thisEntity->pose().getOrigin() - movementMain;
+                    const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(thisEntity->originalPose().getQuaternion(),thisEntity->pose().getQuaternion());
+                    double c = cos(yawDif);
+                    double s = sin(yawDif);
+                    geo::Mat3 yawRotMat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
 
-                    value = (thisEntity->originalPose().getOrigin() - thisCurrentPosition).length();
+                    // rotate orginal model position um main orginal position
+                    geo::Vec3 orig_transformed = mainEntity->originalPose().getOrigin() - thisEntity->originalPose().getOrigin(); // move to 0,0
+                    orig_transformed = yawRotMat * orig_transformed; // rotate like main object rotated
+                    orig_transformed += thisEntity->originalPose().getOrigin(); // move back to mainobjet space origin
+
+                    // move orginal model position mit curmain. curorg offset.
+                    geo::Vec3 mainDiff = thisEntity->pose().getOrigin() - thisEntity->originalPose().getOrigin() ;
+                    orig_transformed += mainDiff;
+
+                    value = (mainEntity->pose().getOrigin()-orig_transformed).length();
 
                     closeValue = thisEntity->stateDefinition()->positionDifferenceClose;
                     openValue = thisEntity->stateDefinition()->positionDifferenceOpen;
