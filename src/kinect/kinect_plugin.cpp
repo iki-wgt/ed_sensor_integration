@@ -30,6 +30,9 @@
 
 #include <vector>
 
+#include <iostream>
+
+
 // ----------------------------------------------------------------------------------------------------
 
 KinectPlugin::KinectPlugin()
@@ -152,7 +155,7 @@ bool KinectPlugin::srvGetImage(ed_sensor_integration::GetImage::Request& req, ed
 
 // ----------------------------------------------------------------------------------------------------
 
-bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateReq, ed_sensor_integration::Update::Response& stateRes)
+bool KinectPlugin::srvStateUpdate(ed_sensor_integration::StateUpdate::Request& stateReq, ed_sensor_integration::StateUpdate::Response& stateRes)
 {
     // ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
     // ros::console::notifyLoggerLevelsChanged();
@@ -167,18 +170,41 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateR
     }
     ROS_DEBUG("Has flag %d", reqEntity->hasFlag("state-update-group-composition"));
     ROS_DEBUG("Group: '%s'", reqEntity->stateUpdateGroup().c_str());
-    // loop over all entitys and grap all from the same group
 
-    if(reqEntity->hasFlag("state-update-group-composition") && !reqEntity->stateUpdateGroup().empty())
+    // if not main, dependents or specific, use specific as standart
+    if(stateReq.update_mode.compare("main")!=0 and \
+       stateReq.update_mode.compare("dependents")!=0 and \
+       stateReq.update_mode.compare("specific")!=0)
+    {
+      stateReq.update_mode = "specific";
+    }
+
+    int updateMode = 0;
+    if(reqEntity->stateUpdateGroup().empty())                                   // no group, has to update the spezific model
+        updateMode = 0;
+    else if(stateReq.update_mode.compare("main")==0)                            // update main no matter what
+        updateMode = 1;
+    else if(stateReq.update_mode.compare("dependents")==0)                      // update all dependents no matter what
+        updateMode = 2;
+    else if(reqEntity->hasFlag("state-update-group-composition"))               // if not main and dependents and has flag update main
+        updateMode = 1;
+    else if(stateReq.update_mode.compare("specific")==0)                        // if spezific and not flagged update specific
+        updateMode = 0;
+    else                                                                        // what ever may be left just be sae and update specific
+        updateMode = 0;
+    // loop over all entitys and grap all from the same group
+    if(updateMode > 0)
     {
         std::vector<ed::EntityConstPtr> entities;
         bool foundMain = false;
+        ros::NodeHandle n;
+        ros::ServiceClient client = n.serviceClient<ed_sensor_integration::StateUpdate>("/ed/kinect/state_update");
         for(ed::WorldModel::const_iterator it = (*world_).begin(); it != (*world_).end(); ++it)
         {
             const ed::EntityConstPtr& e = *it;
             if(reqEntity->stateUpdateGroup().compare(e->stateUpdateGroup()) == 0)
             {
-                if(e->hasFlag("state-update-group-main"))
+                if(e->hasFlag("state-update-group-main") and updateMode == 1)
                 {
                     if(!foundMain)
                     {
@@ -191,12 +217,14 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateR
                         ROS_WARN("There were two or more objects in the group %s whith the flag state-update-group-main.", reqEntity->stateUpdateGroup().c_str());
                     }
                 }
-                else
+                else if(updateMode == 2)
                 {
                     entities.push_back(e);
                 }
             }
         }
+        if(updateMode == 1 and foundMain == false)
+            return true;
         // loop over all found entitys from the group, the main should be in the first place
         for(std::vector<ed::EntityConstPtr>::iterator it = entities.begin(); it != entities.end(); ++it)
         {
@@ -227,7 +255,7 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateR
             {
                 stateRes.deleted_ids.push_back(*it2);
             }
-            stateRes.error_msg = stateRes.error_msg + e->id().c_str() + ": " + newRes.error_msg + "                              \n";
+            stateRes.error_msg = stateRes.error_msg + e->id().c_str() + ": " + newRes.error_msg + " \n";
         }
 
         return true;
@@ -235,9 +263,19 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::Update::Request& stateR
     else
     {
         // boring single update
-        return srvUpdateImpl(stateReq, stateRes, true);
+        // use srvUpdateImpl with StateUpdate by transfering the data into an update msg frame.
+        ed_sensor_integration::Update::Request updateReq;
+        ed_sensor_integration::Update::Response updateRes;
+        updateReq.area_description = stateReq.area_description;
+        updateReq.background_padding = stateReq.background_padding;
+        bool result = false;
+        result =  srvUpdateImpl(updateReq, updateRes, true);
+        stateRes.new_ids = updateRes.new_ids;
+        stateRes.updated_ids = updateRes.updated_ids;
+        stateRes.deleted_ids = updateRes.deleted_ids;
+        stateRes.error_msg = updateRes.error_msg;
+        return result;
     }
-
     return false;
 }
 

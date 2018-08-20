@@ -12,6 +12,7 @@
 #include <ros/service_server.h>
 #include <ed_sensor_integration/GetImage.h>
 #include <ed_sensor_integration/Update.h>
+#include <ed_sensor_integration/StateUpdate.h>
 #include <ed_sensor_integration/GetState.h>
 #include <ed_sensor_integration/RayTrace.h>
 
@@ -47,7 +48,7 @@ private:
 
     Updater updater_;
 
-    RecognizeState recognizeState_; 
+    RecognizeState recognizeState_;
 
 
     // Communication
@@ -72,7 +73,7 @@ private:
 
     ros::ServiceServer srv_state_update_;
 
-    bool srvStateUpdate(ed_sensor_integration::Update::Request& stateReq, ed_sensor_integration::Update::Response& stateRes);
+    bool srvStateUpdate(ed_sensor_integration::StateUpdate::Request& stateReq, ed_sensor_integration::StateUpdate::Response& stateRes);
 
     bool srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_pmzc);
 
