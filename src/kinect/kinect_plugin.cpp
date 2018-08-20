@@ -255,7 +255,8 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::StateUpdate::Request& s
             {
                 stateRes.deleted_ids.push_back(*it2);
             }
-            stateRes.error_msg = stateRes.error_msg + e->id().c_str() + ": " + newRes.error_msg + " \n";
+            if(newRes.error_msg.size() > 0)
+                stateRes.error_msg = stateRes.error_msg + e->id().c_str() + ": " + newRes.error_msg + " \n";
         }
 
         return true;
