@@ -211,7 +211,7 @@ Updater::~Updater()
 
 
 bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& image, const geo::Pose3D& sensor_pose_const,
-                     const UpdateRequest& req, UpdateResult& res, bool apply_pmzc)
+                     const UpdateRequest& req, UpdateResult& res, bool apply_roi)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Prepare some things
@@ -290,25 +290,25 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
         if (fit_supporting_entity)
         {
             FitterData fitter_data;
-            if(apply_pmzc && e->has_pmzc())
+            if(apply_roi && e->has_roi())
             {
-                //The PMZC values are local to the object description in the YAML (no world context).
+                //The ROI values are local to the object description in the YAML (no world context).
                 //Add the height of the object in the world model
                 geo::Pose3D pose = e->pose();
-                float min = e->PMZC()->min + pose.t.z;
-                float max = e->PMZC()->max + pose.t.z;
+                float min = e->ROI()->min + pose.t.z;
+                float max = e->ROI()->max + pose.t.z;
 
-                fitter_.processSensorData(*image, sensor_pose, fitter_data, e->PMZC()->include, min, max);
+                fitter_.processSensorData(*image, sensor_pose, fitter_data, e->ROI()->include, min, max);
             }
             else
             {
                 fitter_.processSensorData(*image, sensor_pose, fitter_data);
             }
 
-            if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change, apply_pmzc))
+            if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change, apply_roi))
             {
                 bool hasStateUpdateGroup = !e->stateUpdateGroup().empty();
-                if(apply_pmzc && hasStateUpdateGroup)
+                if(apply_roi && hasStateUpdateGroup)
                 {
                     if(e->hasFlag("state-update-group-main"))
                     {

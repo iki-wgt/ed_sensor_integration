@@ -74,7 +74,7 @@ private:
 
     ed::models::ModelLoader model_loader_;
 
-    void processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmzc, bool include, float min, float max) const;
+    void processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_roi, bool include, float min, float max) const;
 
 };
 

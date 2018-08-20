@@ -75,7 +75,7 @@ private:
 
     bool srvStateUpdate(ed_sensor_integration::StateUpdate::Request& stateReq, ed_sensor_integration::StateUpdate::Response& stateRes);
 
-    bool srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_pmzc);
+    bool srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_roi);
 
 
     ros::ServiceServer srv_get_state_;

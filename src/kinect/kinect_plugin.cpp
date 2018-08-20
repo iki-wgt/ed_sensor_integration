@@ -286,7 +286,7 @@ bool KinectPlugin::srvUpdate(ed_sensor_integration::Update::Request& req, ed_sen
 }
 // ----------------------------------------------------------------------------------------------------
 
-bool KinectPlugin::srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_pmzc = false)
+bool KinectPlugin::srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_roi = false)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Get new image
@@ -312,7 +312,7 @@ bool KinectPlugin::srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed
     kinect_update_req.max_yaw_change = 0.25 * M_PI;
 
     UpdateResult kinect_update_res(*update_req_);
-    if (!updater_.update(*world_, image, sensor_pose, kinect_update_req, kinect_update_res, apply_pmzc))
+    if (!updater_.update(*world_, image, sensor_pose, kinect_update_req, kinect_update_res, apply_roi))
     {
         res.error_msg = kinect_update_res.error.str();
         return true;

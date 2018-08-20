@@ -7,7 +7,7 @@
 #include <geolib/Shape.h>
 
 #include <ed/types.h>
-#include <ed/PMZC.h>
+#include <ed/ROI.h>
 
 // Image capture
 #include <rgbd/Image.h>
@@ -296,7 +296,7 @@ void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sens
 }
 
 
-void Fitter::processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_pmzc, bool include, float min, float max) const
+void Fitter::processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_roi, bool include, float min, float max) const
 {
     data.sensor_pose = sensor_pose;
     decomposePose(sensor_pose, data.sensor_pose_xya, data.sensor_pose_zrp);
@@ -323,7 +323,7 @@ void Fitter::processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& 
             if (p_floor.z < 0.2) // simple floor filter
                 continue;
 
-            if (apply_pmzc)
+            if (apply_roi)
             {
                 // Filter values based on 3d height.
                 // Continue -> filter value

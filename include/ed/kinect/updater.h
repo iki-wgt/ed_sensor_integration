@@ -47,7 +47,7 @@ public:
     ~Updater();
 
     bool update(const ed::WorldModel& world, const rgbd::ImageConstPtr& image, const geo::Pose3D& sensor_pose,
-                const UpdateRequest& req, UpdateResult& res, bool apply_pmzc = false);
+                const UpdateRequest& req, UpdateResult& res, bool apply_roi = false);
 
 private:
 
