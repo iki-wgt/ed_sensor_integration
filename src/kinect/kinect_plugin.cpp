@@ -15,7 +15,6 @@
 
 #include "ed/kinect/association.h"
 
-
 // GetImage
 #include <rgbd/serialization.h>
 #include <tue/serialization/conversions.h>
@@ -163,11 +162,13 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::StateUpdate::Request& s
     ed::UUID entity_id = stateReq.area_description;
     ed::EntityConstPtr reqEntity = (*world_).getEntity(entity_id);
     ROS_DEBUG("State Update");
+
     if(!reqEntity)
     {
         stateRes.error_msg = "No such entity: '" + stateReq.area_description + "'";
         return true;
     }
+
     ROS_DEBUG("Has flag %d", reqEntity->hasFlag("state-update-group-composition"));
     ROS_DEBUG("Group: '%s'", reqEntity->stateUpdateGroup().c_str());
 
@@ -223,8 +224,12 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::StateUpdate::Request& s
                 }
             }
         }
+
         if(updateMode == 1 and foundMain == false)
+        {
             return true;
+        }
+
         // loop over all found entitys from the group, the main should be in the first place
         for(std::vector<ed::EntityConstPtr>::iterator it = entities.begin(); it != entities.end(); ++it)
         {
@@ -255,8 +260,11 @@ bool KinectPlugin::srvStateUpdate(ed_sensor_integration::StateUpdate::Request& s
             {
                 stateRes.deleted_ids.push_back(*it2);
             }
+
             if(newRes.error_msg.size() > 0)
+            {
                 stateRes.error_msg = stateRes.error_msg + e->id().c_str() + ": " + newRes.error_msg + " \n";
+            }
         }
 
         return true;
