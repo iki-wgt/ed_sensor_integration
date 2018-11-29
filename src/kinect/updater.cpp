@@ -79,12 +79,48 @@ void refitConvexHull(const rgbd::Image& image, const geo::Pose3D& sensor_pose, c
 }
 
 // ----------------------------------------------------------------------------------------------------
+/**
+ * @brief mergeConvexHulls, creating a new convexHull around the two objects. Working in both XY and Z.
+ * @param u1 EntityUpdate used as starting point
+ * @param u2 Merge points into u1
+ * @return new EntityUpdate including new convexHull and measurement points of both inputs.
+ */
+EntityUpdate mergeConvexHulls(const rgbd::Image& image, const geo::Pose3D& sensor_pose, const geo::DepthCamera& cam_model,
+                              const Segmenter& segmenter_, const EntityUpdate& u1, const EntityUpdate& u2)
+{
+    EntityUpdate new_u = u1;
+    double z_max = std::max(u1.pose_map.t.getZ()+u1.chull.z_max,u2.pose_map.t.getZ()+u2.chull.z_max);
+    double z_min = std::min(u1.pose_map.t.getZ()+u1.chull.z_min,u2.pose_map.t.getZ()+u2.chull.z_min);
+
+    std::vector<geo::Vec2f> points(u1.chull.points.size()+u2.chull.points.size());
+    for (unsigned int p = 0; p < u1.chull.points.size(); ++p)
+    {
+        geo::Vec3 p_map = u1.pose_map * geo::Vec3(u1.chull.points[p].x, u1.chull.points[p].y, 0);
+        points[p] = geo::Vec2f(p_map.x, p_map.y);
+    }
+    unsigned int offset = u1.chull.points.size();
+    for (unsigned int p = 0; p < u2.chull.points.size(); ++p)
+    {
+        geo::Vector3 p_map = u2.pose_map * geo::Vec3(u2.chull.points[p].x, u2.chull.points[p].y, 0);
+        points[p + offset] = geo::Vec2f(p_map.x, p_map.y);
+    }
+
+    ed::convex_hull::create(points, z_min, z_max, new_u.chull, new_u.pose_map);
+    refitConvexHull(image, sensor_pose, cam_model, segmenter_, new_u);
+
+    return new_u;
+}
+
+// ----------------------------------------------------------------------------------------------------
 
 // Calculates which depth points are in the given convex hull (in the EntityUpdate), updates the mask,
 // and updates the convex hull height based on the points found
-std::vector<EntityUpdate> mergeOverlappingXYConvexHulls(const rgbd::Image& image, const geo::Pose3D& sensor_pose, const geo::DepthCamera& cam_model,
+std::vector<EntityUpdate> mergeOverlappingConvexHulls(const rgbd::Image& image, const geo::Pose3D& sensor_pose, const geo::DepthCamera& cam_model,
                                                          const Segmenter& segmenter_, const std::vector<EntityUpdate>& updates)
 {
+
+  ROS_INFO("mergoverlapping chulls: nr of updates: %lu", updates.size());
+
   // Updated convex hulls
   std::vector<EntityUpdate> new_updates;
 
@@ -111,26 +147,43 @@ std::vector<EntityUpdate> mergeOverlappingXYConvexHulls(const rgbd::Image& image
       const EntityUpdate& u2 = updates[j];
 
       // If we collide, update the i convex hull
-      if (ed::convex_hull::collide(u1.chull, u1.pose_map.t, u2.chull, u2.pose_map.t, 0, 1e6))
+      if (ed::convex_hull::collide(u1.chull, u1.pose_map.t, u2.chull, u2.pose_map.t, 0, 1e6))  // This should prevent multiple entities above each other;1e6 is ok, because objects in other areas are ignored.
       {
+        ROS_DEBUG("Collition item %i with %i", i, j);
+        ROS_DEBUG("Item %i: xyz: %.2f, %.2f, %.2f, z_min: %.2f, z_max: %.2f", i, u1.pose_map.t.getX(), u1.pose_map.t.getY(), u1.pose_map.t.getZ(), u1.chull.z_min, u1.chull.z_max);
+        ROS_DEBUG("Item %i: xyz: %.2f, %.2f, %.2f, z_min: %.2f, z_max: %.2f", j, u2.pose_map.t.getX(), u2.pose_map.t.getY(), u2.pose_map.t.getZ(), u2.chull.z_min, u2.chull.z_max);
         collission_map[i].push_back(j);
         collided_indices.push_back(j);
       }
     }
   }
 
-  // Now again loop over the updates and only push back in the new updates if it did not collide
+  // Now again loop over the updates and only push back in the new updates if it will not be merged into an other entity
   for (int i = 0; i < updates.size(); ++i)
   {
-    const EntityUpdate& u = updates[i];
-
-    // If index already collided, it will be merged to another one
+    // If index in collided_indices, it will be merged to another one
     if (std::find(collided_indices.begin(), collided_indices.end(), i) == collided_indices.end())
     {
-      // Only push back if not in collided entity
+      // Merging is done by creating a new convexHull. Multiple objects can be merged into one.
+      // No sorting is done. So depending on which entity was taken first, that one is used as basis for merging.
+      // But that shouldn't matter, only for UUID. Although the entities are re-associatied afterwards.
+      // Which match new measurments to old entities.
 
-      // TODO: merge the collided entity with this one; but how to merge, so much methods here .. forest and the trees
-      new_updates.push_back(u);
+      EntityUpdate u1 = updates[i];
+      for (std::vector<int>::iterator it = collission_map[i].begin(); it != collission_map[i].end(); ++it)
+      {
+          ROS_DEBUG_COND(it == collission_map[i].begin(), "Merging entity %i and xx", i);
+          ROS_DEBUG("Merging entity %i and %i", i, *it);
+          const EntityUpdate u2 = updates[*it];
+          u1 = mergeConvexHulls(image, sensor_pose, cam_model, segmenter_, u1, u2);
+
+      }
+      new_updates.push_back(u1);
+      ROS_DEBUG("Adding update of entity %i", i);
+    }
+    else
+    {
+        ROS_DEBUG("Skipping update %i because of collision", i);
     }
   }
 
@@ -258,9 +311,8 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
         {
             fitZRP(*e->shape(), new_pose, *image, sensor_pose_const, sensor_pose);
 
-            std::cout << "Old sensor pose: " << sensor_pose_const << std::endl;
-            std::cout << "New sensor pose: " << sensor_pose << std::endl;
-            std::cout << std::endl;
+            ROS_DEBUG_STREAM("Old sensor pose: " << sensor_pose_const);
+            ROS_DEBUG_STREAM("New sensor pose: " << sensor_pose);
         }
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -360,8 +412,11 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
 
     // - - - - - - - - - - - - - - - - - - - - - - - -
     // Cluster
-
     segmenter_.cluster(filtered_depth_image, cam_model, sensor_pose, res.entity_updates);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - -
+    // Merge the detected clusters if they overlap in XY or Z
+    res.entity_updates = mergeOverlappingConvexHulls(*image, sensor_pose, cam_model, segmenter_, res.entity_updates);
 
     // - - - - - - - - - - - - - - - - - - - - - - - -
     // Increase the convex hulls a bit towards the supporting surface and re-calculate mask
@@ -379,12 +434,7 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - -
-    // Merge the detected clusters if they overlap in XY
-    res.entity_updates = mergeOverlappingXYConvexHulls(*image, sensor_pose, cam_model, segmenter_, res.entity_updates);
-
-    // - - - - - - - - - - - - - - - - - - - - - - - -
     // Perform association and update
-
     associateAndUpdate(associatable_entities, image, sensor_pose, res.entity_updates, res.update_req);
 
     // - - - - - - - - - - - - -  - - - - - - - -  - - -

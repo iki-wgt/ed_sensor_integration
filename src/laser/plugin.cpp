@@ -254,7 +254,7 @@ void LaserPlugin::initialize(ed::InitData& init)
     config.value("max_gap_size", max_gap_size_);
 
     int i_fit_entities = 0;
-    config.value("fit_entities", i_fit_entities, tue::OPTIONAL);
+    config.value("fit_entities", i_fit_entities, tue::config::OPTIONAL);
     fit_entities_ = (i_fit_entities != 0);
 
     if (config.hasError())
@@ -487,12 +487,12 @@ void LaserPlugin::update(const ed::WorldModel& world, const sensor_msgs::LaserSc
     {
         float rs = sensor_ranges[i];
 
-        if (rs == 0 || std::abs(rs - sensor_ranges[current_segment.back()]) > segment_depth_threshold_)
+        if (rs == 0 || std::abs(rs - sensor_ranges[current_segment.back()]) > segment_depth_threshold_ || i == num_beams - 1)
         {
-            // Found a gap
+            // Found a gap or at final reading
             ++gap_size;
 
-            if (gap_size >= max_gap_size_)
+            if (gap_size >= max_gap_size_ || i == num_beams - 1)
             {
                 i = current_segment.back() + 1;
 
