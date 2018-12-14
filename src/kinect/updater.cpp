@@ -558,9 +558,9 @@ void Updater::updateRestricted(const UpdateResult& res, const ed::EntityConstPtr
         geo::Mat3 yawRotMat2 = geo::Mat3(0, -1, 0,1, 0, 0, 0, 0, 1); // yawRotMat is 90° wrong, -+ doesnt matter
 
         moveDir = yawRotMat * yawRotMat2 * moveDir;
+        geo::Vec3 moveDirNorm = moveDir.normalized();
 
         geo::Vec3 newPoseMoveDir = new_pose.getOrigin() - obj->pose().getOrigin();
-        geo::Vec3 moveDirNorm = moveDir.normalized();
         geo::Vec3 newPoseMoveDirNorm = newPoseMoveDir.normalized();
 
         double dotProd = moveDirNorm.dot(newPoseMoveDirNorm);

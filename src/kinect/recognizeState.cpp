@@ -5,6 +5,7 @@
 
 #include "ed/kinect/math_helper.h"
 
+#include <cmath>
 // ----------------------------------------------------------------------------------------------------
 
 
@@ -127,21 +128,22 @@ bool RecognizeState::recognizeState(const ed::WorldModel& world, const Recognize
                 }
                 else
                 {
-                    const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(thisEntity->originalPose().getQuaternion(),thisEntity->pose().getQuaternion());
+                    //Get rotation matix between originalPose mainEntity and currentPose mainEntity
+                    const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(mainEntity->originalPose().getQuaternion(), mainEntity->pose().getQuaternion());
                     double c = cos(yawDif);
                     double s = sin(yawDif);
                     geo::Mat3 yawRotMat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
 
-                    // rotate orginal model position um main orginal position
-                    geo::Vec3 orig_transformed = mainEntity->originalPose().getOrigin() - thisEntity->originalPose().getOrigin(); // move to 0,0
-                    orig_transformed = yawRotMat * orig_transformed; // rotate like main object rotated
-                    orig_transformed += thisEntity->originalPose().getOrigin(); // move back to mainobjet space origin
+                    // Get and rotate mainEntity originalPose (MO) to thisEntity originalPose (TO)
+                    geo::Vec3 MOtoTO = thisEntity->originalPose().getOrigin() - mainEntity->originalPose().getOrigin();
+                    MOtoTO = yawRotMat * MOtoTO;
 
-                    // move orginal model position mit curmain. curorg offset.
-                    geo::Vec3 mainDiff = thisEntity->pose().getOrigin() - thisEntity->originalPose().getOrigin() ;
-                    orig_transformed += mainDiff;
+                    // Get mainEntity pose (MP) to thisEntity pose (TP)
+                    geo::Vec3 MPtoTP = thisEntity->pose().getOrigin() - mainEntity->pose().getOrigin();
 
-                    value = (mainEntity->pose().getOrigin()-orig_transformed).length();
+                    geo::Vec3 diff = MOtoTO - MPtoTP;
+
+                    value = diff.length();
 
                     closeValue = thisEntity->stateDefinition()->positionDifferenceClose;
                     openValue = thisEntity->stateDefinition()->positionDifferenceOpen;
