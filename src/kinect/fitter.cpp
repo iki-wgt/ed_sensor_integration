@@ -6,6 +6,9 @@
 #include <ed/logging.h>
 #include <geolib/Shape.h>
 
+#include <ed/types.h>
+#include <ed/ROI.h>
+
 // Image capture
 #include <rgbd/Image.h>
 #include <geolib/ros/tf_conversions.h>
@@ -21,6 +24,8 @@
 
 // Communication
 #include "ed_sensor_integration/ImageBinary.h"
+
+#include <iostream>
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -63,7 +68,7 @@ Fitter::~Fitter()
 // ----------------------------------------------------------------------------------------------------
 
 bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& world, const ed::UUID& id,
-                                const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change)
+                                const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change, bool state_update)
 {
     const std::vector<double>& sensor_ranges = data.sensor_ranges;
 
@@ -91,6 +96,7 @@ bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& wo
 
     std::vector<double> model_ranges(sensor_ranges.size(), 0);
     std::vector<int> dummy_identifiers(sensor_ranges.size(), -1);
+    std::string thisGroupName = e->stateUpdateGroup(); //Group name of the object thats state is updated
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
@@ -106,6 +112,14 @@ bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& wo
 
         if (id_str.size() >= 5 && id_str.substr(0, 5) == "amigo")
             continue;
+
+        if (!thisGroupName.empty() && state_update)
+        {
+            //Do not render objects that are in the same state-update-group,
+            //because overlapping/too close objects will lead to unexpected results
+            if(thisGroupName.compare(e->stateUpdateGroup()) == 0)
+                continue;
+        }
 
         renderEntity(e, data.sensor_pose_xya, -1, model_ranges, dummy_identifiers);
     }
@@ -271,7 +285,18 @@ bool Fitter::estimateEntityPose(const FitterData& data, const ed::WorldModel& wo
 
 // ----------------------------------------------------------------------------------------------------
 
-void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data) const
+void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data)
+{
+    return processSensorDataImpl(image, sensor_pose, data, false, false, 0, 0);
+}
+
+void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool include, float min, float max)
+{
+    return processSensorDataImpl(image, sensor_pose, data, true, include, min, max);
+}
+
+
+void Fitter::processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_roi, bool include, float min, float max) const
 {
     data.sensor_pose = sensor_pose;
     decomposePose(sensor_pose, data.sensor_pose_xya, data.sensor_pose_zrp);
@@ -297,6 +322,25 @@ void Fitter::processSensorData(const rgbd::Image& image, const geo::Pose3D& sens
 
             if (p_floor.z < 0.2) // simple floor filter
                 continue;
+
+            if (apply_roi)
+            {
+                // Filter values based on 3d height.
+                // Continue -> filter value
+
+                if(include)
+                {
+                    // If not in range [min,max] filter value
+                    if(p_floor.z > max || p_floor.z < min)
+                        continue;
+                }
+                else
+                {
+                    // If in range [min,max] filter value
+                    if(p_floor.z < max && p_floor.z > min)
+                        continue;
+                }
+            }
 
             int i = beam_model_.CalculateBeam(p_floor.x, p_floor.y);
             if (i >= 0 && i < ranges.size())

@@ -24,6 +24,11 @@
 
 #include <ros/console.h>
 
+#include <cmath>
+
+#include "ed/kinect/math_helper.h"
+
+
 // ----------------------------------------------------------------------------------------------------
 
 // Calculates which depth points are in the given convex hull (in the EntityUpdate), updates the mask,
@@ -204,8 +209,9 @@ Updater::~Updater()
 
 // ----------------------------------------------------------------------------------------------------
 
+
 bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& image, const geo::Pose3D& sensor_pose_const,
-                     const UpdateRequest& req, UpdateResult& res)
+                     const UpdateRequest& req, UpdateResult& res, bool apply_roi)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Prepare some things
@@ -284,11 +290,43 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
         if (fit_supporting_entity)
         {
             FitterData fitter_data;
-            fitter_.processSensorData(*image, sensor_pose, fitter_data);
-
-            if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change))
+            if(apply_roi && e->has_roi())
             {
-                res.update_req.setPose(entity_id, new_pose);
+                //The ROI values are local to the object description in the YAML (no world context).
+                //Add the height of the object in the world model
+                geo::Pose3D pose = e->pose();
+                float min = e->ROI()->min + pose.t.z;
+                float max = e->ROI()->max + pose.t.z;
+
+                fitter_.processSensorData(*image, sensor_pose, fitter_data, e->ROI()->include, min, max);
+            }
+            else
+            {
+                fitter_.processSensorData(*image, sensor_pose, fitter_data);
+            }
+
+            if (fitter_.estimateEntityPose(fitter_data, world, entity_id, e->pose(), new_pose, req.max_yaw_change, apply_roi))
+            {
+                bool hasStateUpdateGroup = !e->stateUpdateGroup().empty();
+                if(apply_roi && hasStateUpdateGroup)
+                {
+                    if(e->hasFlag("state-update-group-main"))
+                    {
+                        updateStateGroupPose(world, res, e, new_pose);
+                    }
+                    else if(e->has_move_restrictions())
+                    {
+                        updateRestricted(res, e, new_pose);
+                    }
+                    else
+                    {
+                        res.update_req.setPose(entity_id, new_pose);
+                    }
+                }
+                else
+                {
+                    res.update_req.setPose(entity_id, new_pose);
+                }
             }
             else
             {
@@ -477,4 +515,76 @@ bool Updater::update(const ed::WorldModel& world, const rgbd::ImageConstPtr& ima
     }
 
     return true;
+}
+
+
+void Updater::updateStateGroupPose(const ed::WorldModel& world, const UpdateResult& res, const ed::EntityConstPtr& mainObject, const geo::Pose3D& new_pose)
+{
+    std::string mainGroupName = mainObject->stateUpdateGroup();
+
+    // use AngleBetweenTwoQuaternions instead of geo::Transform3::getYaw, because getYaw behaves strangely
+    const double yawDif = ed_sensor_integration::math_helper::AngleBetweenTwoQuaternions(mainObject->pose().getQuaternion(), new_pose.getQuaternion());
+    double c = cos(yawDif);
+    double s = sin(yawDif);
+    geo::Mat3 yawRotMat = geo::Mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+    geo::Vec3 pose_dif = new_pose.getOrigin() - mainObject->pose().getOrigin();
+
+    for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
+    {
+        const ed::EntityConstPtr& e = *it;
+        if(mainGroupName.compare(e->stateUpdateGroup()) == 0)
+        {
+            geo::Pose3D new_pose;
+
+            geo::Vec3 new_sub_position = e->pose().getOrigin() - mainObject->pose().getOrigin();
+            new_sub_position = yawRotMat * new_sub_position;
+            new_sub_position += mainObject->pose().getOrigin();
+
+            new_pose.setOrigin(new_sub_position + pose_dif);
+            new_pose.setBasis(e->pose().getBasis() * yawRotMat);
+
+            res.update_req.setPose(e->id(), new_pose);
+        }
+    }
+}
+
+void Updater::updateRestricted(const UpdateResult& res, const ed::EntityConstPtr& obj, geo::Pose3D& new_pose)
+{
+    if(obj->moveRestrictions()->canMove)
+    {
+        geo::Vec3 moveDir = geo::Vec3(obj->moveRestrictions()->moveDirection.x, obj->moveRestrictions()->moveDirection.y, 0);
+
+        geo::Mat3 yawRotMat = ed_sensor_integration::math_helper::QuaternionToRotationMatrix(obj->pose().getQuaternion());
+        geo::Mat3 yawRotMat2 = geo::Mat3(0, -1, 0,1, 0, 0, 0, 0, 1); // yawRotMat is 90° wrong, -+ doesnt matter
+
+        moveDir = yawRotMat * yawRotMat2 * moveDir;
+        geo::Vec3 moveDirNorm = moveDir.normalized();
+
+        geo::Vec3 newPoseMoveDir = new_pose.getOrigin() - obj->pose().getOrigin();
+        geo::Vec3 newPoseMoveDirNorm = newPoseMoveDir.normalized();
+
+        double dotProd = moveDirNorm.dot(newPoseMoveDirNorm);
+        dotProd *= newPoseMoveDir.length();
+
+        new_pose = geo::Pose3D(new_pose.R, obj->pose().t + moveDirNorm * dotProd);
+    }
+    else
+    {
+        //Do not update position
+        new_pose.setOrigin(obj->pose().t);
+    }
+
+    if(!obj->moveRestrictions()->canRotate)
+    {
+        //Do not update rotation
+        new_pose.setBasis(obj->pose().R);
+    }
+
+    if(!obj->moveRestrictions()->canMove && !obj->moveRestrictions()->canRotate)
+    {
+        ROS_WARN("Updater::updateRestricted(..). Entity %s can not move or rotate. Might be an error in the YAML.", obj->type().c_str());
+    }
+
+
+    res.update_req.setPose(obj->id(), new_pose);
 }

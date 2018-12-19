@@ -24,6 +24,8 @@ add_service_files(
   FILES
     GetImage.srv
     Update.srv
+    StateUpdate.srv
+    GetState.srv
     RayTrace.srv
 )
 
@@ -79,6 +81,10 @@ add_library(ed_kinect
     include/ed/kinect/entity_update.h
     src/kinect/renderer.cpp
     include/ed/kinect/renderer.h
+    src/kinect/recognizeState.cpp
+    include/ed/kinect/recognizeState.h
+    src/kinect/math_helper.cpp
+    include/ed/kinect/math_helper.h
 )
 target_link_libraries(ed_kinect ed_association ${catkin_LIBRARIES})
 add_dependencies(ed_kinect ${PROJECT_NAME}_gencpp ${${PROJECT_NAME}_EXPORTED_TARGETS})

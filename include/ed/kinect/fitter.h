@@ -44,13 +44,15 @@ public:
 
     ~Fitter();
 
-    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data) const;
+    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data);
+    void processSensorData(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool include, float min, float max);
+
 
     void renderEntity(const ed::EntityConstPtr& e, const geo::Pose3D& sensor_pose_xya, int identifier,
                       std::vector<double>& model_ranges, std::vector<int>& identifiers);
 
     bool estimateEntityPose(const FitterData& data, const ed::WorldModel& world, const ed::UUID& id,
-                   const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change = M_PI);
+                   const geo::Pose3D& expected_pose, geo::Pose3D& fitted_pose, double max_yaw_change = M_PI, bool state_update = false);
 
     EntityRepresentation2D GetOrCreateEntity2D(const ed::EntityConstPtr& e);
 
@@ -71,6 +73,8 @@ private:
     std::map<std::string, EntityRepresentation2D> models_;
 
     ed::models::ModelLoader model_loader_;
+
+    void processSensorDataImpl(const rgbd::Image& image, const geo::Pose3D& sensor_pose, FitterData& data, bool apply_roi, bool include, float min, float max) const;
 
 };
 

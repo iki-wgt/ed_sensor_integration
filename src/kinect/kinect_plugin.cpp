@@ -27,6 +27,11 @@
 
 #include "ray_tracer.h"
 
+#include <vector>
+
+#include <iostream>
+
+
 // ----------------------------------------------------------------------------------------------------
 
 KinectPlugin::KinectPlugin()
@@ -43,7 +48,7 @@ KinectPlugin::~KinectPlugin()
 
 void KinectPlugin::initialize(ed::InitData& init)
 {
-    tue::Configuration& config = init.config;    
+    tue::Configuration& config = init.config;
 
     std::string topic;
     if (config.value("topic", topic))
@@ -61,6 +66,8 @@ void KinectPlugin::initialize(ed::InitData& init)
     srv_get_image_ = nh.advertiseService("kinect/get_image", &KinectPlugin::srvGetImage, this);
     srv_update_ = nh.advertiseService("kinect/update", &KinectPlugin::srvUpdate, this);
     srv_ray_trace_ = nh.advertiseService("ray_trace", &KinectPlugin::srvRayTrace, this);
+    srv_state_update_ = nh.advertiseService("kinect/state_update", &KinectPlugin::srvStateUpdate, this);
+    srv_get_state_ = nh.advertiseService("kinect/get_state", &KinectPlugin::srvGetState, this);
 
     ray_trace_visualization_publisher_ = nh.advertise<visualization_msgs::Marker>("ray_trace_visualization", 10);
 }
@@ -69,7 +76,7 @@ void KinectPlugin::initialize(ed::InitData& init)
 
 void KinectPlugin::process(const ed::PluginInput& data, ed::UpdateRequest& req)
 {
-    const ed::WorldModel& world = data.world;   
+    const ed::WorldModel& world = data.world;
 
     // - - - - - - - - - - - - - - - - - -
     // Fetch kinect image and pose
@@ -147,8 +154,148 @@ bool KinectPlugin::srvGetImage(ed_sensor_integration::GetImage::Request& req, ed
 
 // ----------------------------------------------------------------------------------------------------
 
+bool KinectPlugin::srvStateUpdate(ed_sensor_integration::StateUpdate::Request& stateReq, ed_sensor_integration::StateUpdate::Response& stateRes)
+{
+    // ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+    // ros::console::notifyLoggerLevelsChanged();
+
+    ed::UUID entity_id = stateReq.area_description;
+    ed::EntityConstPtr reqEntity = (*world_).getEntity(entity_id);
+    ROS_DEBUG("State Update");
+
+    if(!reqEntity)
+    {
+        stateRes.error_msg = "No such entity: '" + stateReq.area_description + "'";
+        return true;
+    }
+
+    ROS_DEBUG("Has flag %d", reqEntity->hasFlag("state-update-group-composition"));
+    ROS_DEBUG("Group: '%s'", reqEntity->stateUpdateGroup().c_str());
+
+    // if not main, dependents or specific, use specific as standart
+    if(stateReq.update_mode.compare("main")!=0 and \
+       stateReq.update_mode.compare("dependents")!=0 and \
+       stateReq.update_mode.compare("specific")!=0)
+    {
+      stateReq.update_mode = "specific";
+    }
+
+    int updateMode = 0;
+    if(reqEntity->stateUpdateGroup().empty())                                   // no group, has to update the spezific model
+        updateMode = 0;
+    else if(stateReq.update_mode.compare("main")==0)                            // update main no matter what
+        updateMode = 1;
+    else if(stateReq.update_mode.compare("dependents")==0)                      // update all dependents no matter what
+        updateMode = 2;
+    else if(reqEntity->hasFlag("state-update-group-composition"))               // if not main and dependents and has flag update main
+        updateMode = 1;
+    else if(stateReq.update_mode.compare("specific")==0)                        // if spezific and not flagged update specific
+        updateMode = 0;
+    else                                                                        // what ever may be left just be sae and update specific
+        updateMode = 0;
+    // loop over all entitys and grap all from the same group
+    if(updateMode > 0)
+    {
+        std::vector<ed::EntityConstPtr> entities;
+        bool foundMain = false;
+        ros::NodeHandle n;
+        ros::ServiceClient client = n.serviceClient<ed_sensor_integration::StateUpdate>("/ed/kinect/state_update");
+        for(ed::WorldModel::const_iterator it = (*world_).begin(); it != (*world_).end(); ++it)
+        {
+            const ed::EntityConstPtr& e = *it;
+            if(reqEntity->stateUpdateGroup().compare(e->stateUpdateGroup()) == 0)
+            {
+                if(e->hasFlag("state-update-group-main") and updateMode == 1)
+                {
+                    if(!foundMain)
+                    {
+                        // set main group entity as first in the list
+                        entities.insert(entities.begin(), e);
+                        foundMain = true;
+                    }
+                    else
+                    {
+                        ROS_WARN("There were two or more objects in the group %s whith the flag state-update-group-main.", reqEntity->stateUpdateGroup().c_str());
+                    }
+                }
+                else if(updateMode == 2)
+                {
+                    entities.push_back(e);
+                }
+            }
+        }
+
+        if(updateMode == 1 and foundMain == false)
+        {
+            return true;
+        }
+
+        // loop over all found entitys from the group, the main should be in the first place
+        for(std::vector<ed::EntityConstPtr>::iterator it = entities.begin(); it != entities.end(); ++it)
+        {
+            ed::EntityConstPtr& e = *it;
+            ed_sensor_integration::Update::Request newReq;
+            ed_sensor_integration::Update::Response newRes;
+            newReq.area_description = e->id().c_str();
+            newReq.background_padding = stateReq.background_padding;
+
+            ROS_DEBUG("Updating: %s", e->id().c_str());
+
+            if(!srvUpdateImpl(newReq, newRes, true))
+            {
+                return false;
+            }
+            // store result informations of each entity inside the commulated result
+            for(std::vector<std::string>::iterator it2 = newRes.new_ids.begin(); it2 != newRes.new_ids.end(); ++it2)
+            {
+                stateRes.new_ids.push_back(*it2);
+            }
+
+            for(std::vector<std::string>::iterator it2 = newRes.updated_ids.begin(); it2 != newRes.updated_ids.end(); ++it2)
+            {
+                stateRes.updated_ids.push_back(*it2);
+            }
+
+            for(std::vector<std::string>::iterator it2 = newRes.deleted_ids.begin(); it2 != newRes.deleted_ids.end(); ++it2)
+            {
+                stateRes.deleted_ids.push_back(*it2);
+            }
+
+            if(newRes.error_msg.size() > 0)
+            {
+                stateRes.error_msg = stateRes.error_msg + e->id().c_str() + ": " + newRes.error_msg + " \n";
+            }
+        }
+
+        return true;
+    }
+    else
+    {
+        // boring single update
+        // use srvUpdateImpl with StateUpdate by transfering the data into an update msg frame.
+        ed_sensor_integration::Update::Request updateReq;
+        ed_sensor_integration::Update::Response updateRes;
+        updateReq.area_description = stateReq.area_description;
+        updateReq.background_padding = stateReq.background_padding;
+        bool result = false;
+        result =  srvUpdateImpl(updateReq, updateRes, true);
+        stateRes.new_ids = updateRes.new_ids;
+        stateRes.updated_ids = updateRes.updated_ids;
+        stateRes.deleted_ids = updateRes.deleted_ids;
+        stateRes.error_msg = updateRes.error_msg;
+        return result;
+    }
+    return false;
+}
+
 bool KinectPlugin::srvUpdate(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res)
-{    
+{
+    return srvUpdateImpl(req, res, false);
+}
+// ----------------------------------------------------------------------------------------------------
+
+bool KinectPlugin::srvUpdateImpl(ed_sensor_integration::Update::Request& req, ed_sensor_integration::Update::Response& res, bool apply_roi = false)
+{
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Get new image
 
@@ -173,7 +320,7 @@ bool KinectPlugin::srvUpdate(ed_sensor_integration::Update::Request& req, ed_sen
     kinect_update_req.max_yaw_change = 0.25 * M_PI;
 
     UpdateResult kinect_update_res(*update_req_);
-    if (!updater_.update(*world_, image, sensor_pose, kinect_update_req, kinect_update_res))
+    if (!updater_.update(*world_, image, sensor_pose, kinect_update_req, kinect_update_res, apply_roi))
     {
         res.error_msg = kinect_update_res.error.str();
         return true;
@@ -199,6 +346,35 @@ bool KinectPlugin::srvUpdate(ed_sensor_integration::Update::Request& req, ed_sen
 
     return true;
 }
+
+// ----------------------------------------------------------------------------------------------------
+
+#include <iostream>
+
+bool KinectPlugin::srvGetState(ed_sensor_integration::GetState::Request& req, ed_sensor_integration::GetState::Response& res)
+{
+    RecognizeStateRequest recognize_state_req = RecognizeStateRequest(req.id);
+    RecognizeStateResult recognize_state_res;
+
+    bool recognizeStateWorked = recognizeState_.recognizeState(*world_, recognize_state_req, recognize_state_res);
+
+    res.error_msg = recognize_state_res.error.str();
+    res.warning_msg = recognize_state_res.warning.str();
+
+    if (recognizeStateWorked)
+    {
+        res.state = recognize_state_res.state;
+        res.stateRatio = recognize_state_res.stateRatio;
+    }
+    else
+    {
+        res.state = "";
+        res.stateRatio = -1;
+    }
+
+    return true;
+}
+
 
 // ----------------------------------------------------------------------------------------------------
 

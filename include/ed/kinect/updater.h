@@ -47,7 +47,7 @@ public:
     ~Updater();
 
     bool update(const ed::WorldModel& world, const rgbd::ImageConstPtr& image, const geo::Pose3D& sensor_pose,
-                const UpdateRequest& req, UpdateResult& res);
+                const UpdateRequest& req, UpdateResult& res, bool apply_roi = false);
 
 private:
 
@@ -57,6 +57,11 @@ private:
 
     // Stores for each segmented entity with which area description it was found
     std::map<ed::UUID, std::string> id_to_area_description_;
+
+    void updateStateGroupPose(const ed::WorldModel& world, const UpdateResult& res, const ed::EntityConstPtr& mainObject, const geo::Pose3D& new_pose);
+
+    void updateRestricted(const UpdateResult& res, const ed::EntityConstPtr& mainObject, geo::Pose3D& new_pose);
+
 
 };
 

@@ -1,0 +1,11 @@
+# Examples:
+# id: 'shelf/drawer'        Gets the current state of the drawer relative to the shelf
+
+string id
+
+---
+
+string state          # Either open, close or empty on error
+float32 stateRatio    # Range [0, 1]; -1 on error
+string error_msg      # Empty if no errors
+string warning_msg    # Empty if no warnings
